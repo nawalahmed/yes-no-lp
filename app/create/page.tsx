@@ -2,30 +2,53 @@
 
 import { useState } from "react";
 
-const STATIC_QUESTION = "Will you be my valentine?";
+type DodgeButton = "yes" | "no";
 
 export default function CreatePage() {
+  const [recipientName, setRecipientName] = useState("");
+  const [question, setQuestion] = useState("Will you be my valentine?");
   const [isLoading, setIsLoading] = useState(false);
   const [createdLink, setCreatedLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [dodgeButton, setDodgeButton] = useState<DodgeButton>("no");
+
   async function onCreate() {
-    console.log("Create clicked");
+    if (isLoading) return;
+
     setError(null);
     setCreatedLink(null);
+
+    const r = recipientName.trim().slice(0, 80);
+    const q = question.trim().slice(0, 200);
+
+    if (!r || !q) {
+      setError("Please fill in all fields.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       const res = await fetch("/api/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: STATIC_QUESTION }),
+        credentials: "include",
         cache: "no-store",
-    });
-
+        body: JSON.stringify({
+          recipientName: r,
+          question: q,
+          dodgeButton,
+        }),
+      });
 
       if (!res.ok) {
         const msg = await res.text();
+
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("Please subscribe first, then try again.");
+        }
+
         throw new Error(msg || "Failed to create link.");
       }
 
@@ -43,23 +66,58 @@ export default function CreatePage() {
     <main className="page">
       <section className="hero">
         <h1 className="title">Create a link</h1>
-        <p className="subtitle">This question is static. You generate a shareable link.</p>
+        <p className="subtitle">Personalize it. Share it.</p>
 
         <div className="cardWrap">
-          <div className="card">
-            <div className="cardHeader">
-              <span className="pill">Preview</span>
-              <span className="muted">Static</span>
-            </div>
+          <div className="card minimal">
+            <div className="stack">
+              <div className="field">
+                <label className="label light">Recipient name</label>
+                <input
+                  type="text"
+                  className="inputGhost"
+                  placeholder="Enter their name"
+                  value={recipientName}
+                  onChange={(e) => setRecipientName(e.target.value)}
+                  autoComplete="off"
+                  maxLength={80}
+                />
+              </div>
 
-            <div className="field">
-              <div className="label">Question</div>
-              <div className="value">{STATIC_QUESTION}</div>
-            </div>
+              <div className="field">
+                <label className="label light">Question</label>
+                <textarea
+                  rows={2}
+                  className="inputGhost textareaGhost"
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  maxLength={200}
+                />
+              </div>
 
-            <div className="btnGrid">
-              <button className="btnChoice" type="button">Yes</button>
-              <button className="btnChoice" type="button">No</button>
+              <div className="field">
+                <label className="label light">Recipient will struggle to click?</label>
+
+                <label className="radioRow">
+                  <input
+                    type="radio"
+                    name="dodge"
+                    checked={dodgeButton === "no"}
+                    onChange={() => setDodgeButton("no")}
+                  />
+                  <span className="radioText">No</span>
+                </label>
+
+                <label className="radioRow">
+                  <input
+                    type="radio"
+                    name="dodge"
+                    checked={dodgeButton === "yes"}
+                    onChange={() => setDodgeButton("yes")}
+                  />
+                  <span className="radioText">Yes</span>
+                </label>
+              </div>
             </div>
 
             <button
@@ -76,7 +134,16 @@ export default function CreatePage() {
             {createdLink ? (
               <div className="successBox">
                 <div className="successTitle">Your link is ready</div>
-                <div className="successLink">{createdLink}</div>
+
+                <a
+                  className="successLinkAnchor"
+                  href={createdLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {createdLink}
+                </a>
+
                 <div className="successRow">
                   <button
                     className="btnGhost"
@@ -85,6 +152,15 @@ export default function CreatePage() {
                   >
                     Copy link
                   </button>
+
+                  <a
+                    className="btnPrimary"
+                    href={createdLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open link
+                  </a>
                 </div>
               </div>
             ) : null}

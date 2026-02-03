@@ -1,54 +1,59 @@
+import {
+  createPageInDb,
+  getPageById as getPageByIdFromDb,
+  setAnswerInDb,
+} from "./db-operations";
+
 export type PageRecord = {
   id: string;
   question: string;
+  recepientName: string;
   answer: "yes" | "no" | null;
   createdAt: number;
 };
 
-type StoreShape = {
-  pages: Map<string, PageRecord>;
-};
+export async function createPage(
+  question: string,
+  recepientName: string,
+  senderEmail = "",
+  dodgeButton: "yes" | "no" = "yes"
+): Promise<PageRecord> {
+  const record = await createPageInDb(question, recepientName, senderEmail, dodgeButton);
 
-declare global {
-  // eslint-disable-next-line no-var
-  var __YESNO_STORE__: StoreShape | undefined;
-}
-
-const store: StoreShape =
-  globalThis.__YESNO_STORE__ ??
-  {
-    pages: new Map<string, PageRecord>(),
+  return {
+    id: record.id,
+    question: record.question,
+    recepientName: record.recipient_name,
+    answer: record.answer,
+    createdAt: record.created_at,
   };
-
-globalThis.__YESNO_STORE__ = store;
-
-function randomId(len = 12) {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let out = "";
-  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
 }
 
-export function createPage(question: string) {
-  const id = randomId(12);
-  const record: PageRecord = {
-    id,
-    question,
-    answer: null,
-    createdAt: Date.now(),
-  };
-  store.pages.set(id, record);
-  return record;
-}
-
-export function getPageById(id: string) {
-  return store.pages.get(id) || null;
-}
-
-export function setAnswer(id: string, answer: "yes" | "no") {
-  const record = store.pages.get(id);
+export async function getPageById(id: string): Promise<PageRecord | null> {
+  const record = await getPageByIdFromDb(id);
   if (!record) return null;
-  record.answer = answer;
-  store.pages.set(id, record);
-  return record;
+
+  return {
+    id: record.id,
+    question: record.question,
+    recepientName: record.recipient_name,
+    answer: record.answer,
+    createdAt: record.created_at,
+  };
+}
+
+export async function setAnswer(id: string, answer: "yes" | "no"): Promise<PageRecord | null> {
+  const ok = await setAnswerInDb(id, answer);
+  if (!ok) return null;
+
+  const updated = await getPageByIdFromDb(id);
+  if (!updated) return null;
+
+  return {
+    id: updated.id,
+    question: updated.question,
+    recepientName: updated.recipient_name,
+    answer: updated.answer,
+    createdAt: updated.created_at,
+  };
 }

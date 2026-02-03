@@ -1,4 +1,13 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import EmailSubscribeModal from "./components/EmailSubscribeModal";
+
 export default function HomePage() {
+  const router = useRouter();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalSource, setModalSource] = useState<"tool1" | "tool2">("tool1");
   return (
     <main className="page">
       <section className="hero">
@@ -24,8 +33,16 @@ export default function HomePage() {
     </div>
 
     <div className="ctaRow">
-      <a className="btnPrimary" href="/create">Create link</a>
-      <span className="mutedSmall"></span>
+      <button
+        className="btnPrimary"
+        onClick={() => {
+          setModalSource("tool1");
+          setModalOpen(true);
+        }}
+      >
+        Create link
+      </button>
+      <span className="mutedSmall">Dodge Effect</span>
     </div>
   </div>
 
@@ -44,24 +61,41 @@ export default function HomePage() {
     </div>
 
     <div className="ctaRow">
-    <a
-      className="btnPrimary"
-      href="https://nwl.kit.com/ddba6053ef"
-      target="_blank"
-      rel="noopener noreferrer"
-    >Subscribe to access
-  </a>  
-    <span className="mutedSmall"></span>
+      <button
+        className="btnPrimary"
+        onClick={() => {
+          setModalSource("tool2");
+          setModalOpen(true);
+        }}
+      >
+        Subscribe to access
+      </button>
+      <span className="mutedSmall"></span>
     </div>
   </div>
 </section>
 
 
       <footer className="footer">
-        <a href="/privacy" className="footerLink">Privacy</a>
-        <a href="/terms" className="footerLink">Terms</a>
         <a href="mailto:hello@nawalahmed.me" className="footerLink">Contact</a>
       </footer>
+
+      <EmailSubscribeModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        source={modalSource}
+        onSuccess={
+          modalSource === "tool1"
+            ? () => {
+                setModalOpen(false);
+                router.push("/create");
+              }
+            : () => {
+              setModalOpen(false);
+              router.push("https://imaginary-beak-821.notion.site/Turn-One-Message-Into-a-Posted-Instagram-Carousel-2eed8950d0698045b4d8e314165b5be2");
+            }
+        }
+      />
     </main>
   );
 }

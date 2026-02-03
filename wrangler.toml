@@ -1,0 +1,15 @@
+"$schema" = "./node_modules/wrangler/config-schema.json"
+
+main = ".open-next/worker.js"
+name = "yes-no-lp"
+
+compatibility_date = "2026-01-30"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+[vars]
+TURSO_DB_URL="libsql://dev-db-nawalahmed.aws-eu-west-1.turso.io"
+TURSO_DB_AUTH_TOKEN="eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NzAwMjc2NTEsImlkIjoiOTA1ZjE5NDYtMjE0OC00NDhjLTk5Y2ItZThkZDEyZWU1YzRiIiwicmlkIjoiNTQzNTdmY2YtODYxZS00OWIwLTliZGUtNGZhNzYwNWMwNWRiIn0.QVTeXyaQiohW2X6kzIHbtulngOj0o2K7LHcMgE0gXDUKGQYybVwBShRwIbVWhKuTxaUqB80hk1c4alDVl6WxCw"

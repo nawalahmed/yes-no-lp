@@ -6,9 +6,8 @@ export default async function ResultPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const page = getPageById(id);
-
-  const answer = page?.answer;
+  const page = await getPageById(id);
+  const answer = page?.answer ?? null;
 
   return (
     <main className="page">
@@ -21,24 +20,32 @@ export default async function ResultPage({
           justifyContent: "center",
         }}
       >
-        <div
-          style={{
-            textAlign: "center",
-          }}
-        >
+        <div style={{ textAlign: "center" }}>
+          {answer === "yes" && (
+            <div
+              style={{
+                fontSize: "28px",
+                fontWeight: 600,
+                marginBottom: "20px",
+                letterSpacing: "0.5px",
+              }}
+            >
+              aha! you made my day ✨
+            </div>
+          )}
+
           {answer === "yes" ? (
             <img
-  src="/images/yes.png"
-  alt="Yes"
-  style={{
-    width: "220px",
-    maxWidth: "80vw",
-    height: "auto",
-    borderRadius: "20px",
-    boxShadow: "0 16px 40px rgba(0, 0, 0, 0.25)",
-  }}
-/>
-
+              src="/images/yes.png"
+              alt="Yes"
+              style={{
+                width: "220px",
+                maxWidth: "80vw",
+                height: "auto",
+                borderRadius: "20px",
+                boxShadow: "0 16px 40px rgba(0, 0, 0, 0.25)",
+              }}
+            />
           ) : (
             <span
               style={{

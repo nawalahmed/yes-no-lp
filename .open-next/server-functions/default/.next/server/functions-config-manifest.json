@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "functions": {
+    "/api/answer": {},
+    "/api/create": {},
+    "/api/page": {}
+  }
+}

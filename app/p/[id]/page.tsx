@@ -1,7 +1,9 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+type DodgeButton = "yes" | "no";
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -9,14 +11,25 @@ function clamp(n: number, min: number, max: number) {
 
 export default function RecipientPage() {
   const router = useRouter();
-  const params = useParams<{ id: string }>();
-  const id = params?.id;
+  const params = useParams();
 
-  const [question, setQuestion] = useState("");
+  // Next can return string | string[]. Be defensive.
+  const id = useMemo(() => {
+    const raw = (params as any)?.id as string | string[] | undefined;
+    if (!raw) return "";
+    return Array.isArray(raw) ? raw[0] : raw;
+  }, [params]);
+
+  const [recipientName, setRecipientName] = useState("");
+  const [question, setQuestion] = useState<string | null>(null); // null = loading
   const [loading, setLoading] = useState(false);
+  const [dodgeButton, setDodgeButton] = useState<DodgeButton>("no");
 
   const [started, setStarted] = useState(false);
   const startedRef = useRef(false);
+
+  const yesPlaceholderRef = useRef<HTMLButtonElement | null>(null);
+  const yesFloatingRef = useRef<HTMLButtonElement | null>(null);
 
   const noPlaceholderRef = useRef<HTMLButtonElement | null>(null);
   const noFloatingRef = useRef<HTMLButtonElement | null>(null);
@@ -24,59 +37,108 @@ export default function RecipientPage() {
   const mouseRef = useRef({ x: 0, y: 0, has: false });
   const posRef = useRef({ x: 0, y: 0 });
 
+  const dodgePlaceholderRef = useMemo(() => {
+    return dodgeButton === "yes" ? yesPlaceholderRef : noPlaceholderRef;
+  }, [dodgeButton]);
+
+  const dodgeFloatingRef = useMemo(() => {
+    return dodgeButton === "yes" ? yesFloatingRef : noFloatingRef;
+  }, [dodgeButton]);
+
+  // Fetch page data
   useEffect(() => {
     if (!id) return;
+
+    const ac = new AbortController();
+    setQuestion(null);
 
     (async () => {
       try {
         const res = await fetch(`/api/page?id=${encodeURIComponent(id)}`, {
           cache: "no-store",
+          signal: ac.signal,
         });
-        if (!res.ok) return setQuestion(" ");
-        const data = (await res.json()) as { question: string };
-        setQuestion(data.question || " ");
-      } catch {
-        setQuestion(" ");
+
+        if (!res.ok) {
+          // Don’t force blank space. Keep a readable fallback on mobile.
+          setQuestion("Could not load the question.");
+          setRecipientName("");
+          setDodgeButton("no");
+          return;
+        }
+
+        const data = (await res.json()) as {
+          question?: string;
+          name?: string;
+          dodgeButton?: DodgeButton;
+        };
+
+        const q = String(data.question ?? "").trim();
+        setQuestion(q.length ? q : " ");
+        setRecipientName(String(data.name ?? "").trim());
+        setDodgeButton(data.dodgeButton === "yes" ? "yes" : "no");
+      } catch (e: any) {
+        if (e?.name === "AbortError") return;
+        setQuestion("Could not load the question.");
+        setRecipientName("");
+        setDodgeButton("no");
       }
     })();
+
+    return () => ac.abort();
   }, [id]);
 
+  // Phase 1. mouse and touch support
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
     const prefersReduced = window.matchMedia?.(
       "(prefers-reduced-motion: reduce)"
     )?.matches;
     if (prefersReduced) return;
 
-    const onMove = (e: MouseEvent) => {
-      mouseRef.current = { x: e.clientX, y: e.clientY, has: true };
+    const beginIfNeeded = () => {
+      if (startedRef.current) return;
+      startedRef.current = true;
 
-      if (!startedRef.current) {
-        startedRef.current = true;
-
-        const ph = noPlaceholderRef.current;
-        if (ph) {
-          const r = ph.getBoundingClientRect();
-          posRef.current = { x: r.left, y: r.top };
-        } else {
-          posRef.current = {
-            x: window.innerWidth / 2,
-            y: window.innerHeight / 2,
-          };
-        }
-
-        setStarted(true);
+      const ph = dodgePlaceholderRef.current;
+      if (ph) {
+        const r = ph.getBoundingClientRect();
+        posRef.current = { x: r.left, y: r.top };
+      } else {
+        posRef.current = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
       }
+
+      setStarted(true);
     };
 
-    window.addEventListener("mousemove", onMove, { passive: true });
-    return () => window.removeEventListener("mousemove", onMove);
-  }, []);
+    const onMouseMove = (e: MouseEvent) => {
+      mouseRef.current = { x: e.clientX, y: e.clientY, has: true };
+      beginIfNeeded();
+    };
 
+    const onTouch = (e: TouchEvent) => {
+      const t = e.touches?.[0] || e.changedTouches?.[0];
+      if (!t) return;
+      mouseRef.current = { x: t.clientX, y: t.clientY, has: true };
+      beginIfNeeded();
+    };
+
+    window.addEventListener("mousemove", onMouseMove, { passive: true });
+    window.addEventListener("touchstart", onTouch, { passive: true });
+    window.addEventListener("touchmove", onTouch, { passive: true });
+
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("touchstart", onTouch);
+      window.removeEventListener("touchmove", onTouch);
+    };
+  }, [dodgePlaceholderRef]);
+
+  // Animation loop for dodging
   useEffect(() => {
     if (!started) return;
-
-    const btn = noFloatingRef.current;
-    if (!btn) return;
+    if (typeof window === "undefined") return;
 
     const prefersReduced = window.matchMedia?.(
       "(prefers-reduced-motion: reduce)"
@@ -86,7 +148,7 @@ export default function RecipientPage() {
     let raf = 0;
 
     const tick = () => {
-      const b = noFloatingRef.current;
+      const b = dodgeFloatingRef.current;
       if (!b) {
         raf = requestAnimationFrame(tick);
         return;
@@ -112,57 +174,55 @@ export default function RecipientPage() {
       const dy = cy - my;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      const repelRadius = 560;
-      const maxStep = 26;
+      const repelRadius = 380;
+      const maxStep = 28;
 
       if (mouseRef.current.has && dist < repelRadius) {
         const strength = (repelRadius - dist) / repelRadius;
         const nx = dx / (dist || 1);
         const ny = dy / (dist || 1);
 
-        const step = maxStep * (0.35 + strength * 1.6);
+        const step = maxStep * (0.4 + strength * 1.7);
         posRef.current.x += nx * step;
         posRef.current.y += ny * step;
       }
 
-      posRef.current.x = clamp(
-        posRef.current.x,
-        bounds.minX,
-        bounds.maxX
-      );
-      posRef.current.y = clamp(
-        posRef.current.y,
-        bounds.minY,
-        bounds.maxY
-      );
+      posRef.current.x = clamp(posRef.current.x, bounds.minX, bounds.maxX);
+      posRef.current.y = clamp(posRef.current.y, bounds.minY, bounds.maxY);
 
       b.style.transform = `translate(${posRef.current.x}px, ${posRef.current.y}px)`;
-
       raf = requestAnimationFrame(tick);
     };
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [started]);
+  }, [started, dodgeFloatingRef]);
 
-  async function submitYes() {
+  async function submit(answer: "yes" | "no") {
     if (!id) return;
 
     try {
       setLoading(true);
 
-      const form = new FormData();
-      form.set("id", id);
-      form.set("answer", "yes");
+      // More compatible than FormData in some mobile edge cases
+      const body = new URLSearchParams();
+      body.set("id", id);
+      body.set("answer", answer);
 
       const res = await fetch("/api/answer", {
         method: "POST",
-        body: form,
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        },
+        body: body.toString(),
+        cache: "no-store",
       });
 
       if (!res.ok) {
+        // Helps you debug real error cause, without breaking UX
+        const msg = (await res.text().catch(() => "")) || "Could not submit. Try again.";
         setLoading(false);
-        alert("Could not submit. Try again.");
+        alert(msg);
         return;
       }
 
@@ -172,6 +232,15 @@ export default function RecipientPage() {
       alert("Could not submit. Try again.");
     }
   }
+
+  const titleText = useMemo(() => {
+    const q = question === null ? "Loading..." : (question || " ");
+    const prefix = recipientName ? `${recipientName}, ` : "";
+    return `${prefix}${q}`;
+  }, [recipientName, question]);
+
+  const yesIsDodging = dodgeButton === "yes";
+  const noIsDodging = dodgeButton === "no";
 
   return (
     <main className="page">
@@ -185,14 +254,19 @@ export default function RecipientPage() {
           />
         </div>
 
-        <h1 className="questionTitle">{question || " "}</h1>
+        <h1 className="questionTitle">{titleText}</h1>
 
         <div className="buttonRow">
           <button
-            className="btnChoice btnChoiceWide"
+            ref={yesPlaceholderRef}
+            className={`btnChoice btnChoiceWide ${
+              started && yesIsDodging ? "noPlaceholderHidden" : ""
+            }`}
             type="button"
-            onClick={submitYes}
-            disabled={loading || !id}
+            onClick={() => submit("yes")}
+            disabled={loading || !id || (started && yesIsDodging)}
+            aria-disabled={loading || !id || (started && yesIsDodging)}
+            title={started && yesIsDodging ? "Nice try 😄" : ""}
           >
             {loading ? "Sending..." : "Yes"}
           </button>
@@ -200,22 +274,45 @@ export default function RecipientPage() {
           <button
             ref={noPlaceholderRef}
             className={`btnChoice btnChoiceWide ${
-              started ? "noPlaceholderHidden" : ""
+              started && noIsDodging ? "noPlaceholderHidden" : ""
             }`}
             type="button"
-            disabled
-            aria-disabled="true"
-            title="Nice try 😄"
+            onClick={() => submit("no")}
+            disabled={loading || !id || (started && noIsDodging)}
+            aria-disabled={loading || !id || (started && noIsDodging)}
+            title={started && noIsDodging ? "Nice try 😄" : ""}
           >
             No
           </button>
         </div>
 
         <p className="tinyFooter">
-          P.S. The No button is on a personal growth journey. It’s not ready yet.
+          {dodgeButton === "no"
+            ? "P.S. The No button is on a personal growth journey. It’s not ready yet."
+            : "P.S. The Yes button is shy today. You’ll have to work for it."}
         </p>
 
-        {started ? (
+        {started && yesIsDodging ? (
+          <button
+            ref={yesFloatingRef}
+            className="btnChoice btnNoFloating"
+            type="button"
+            disabled
+            aria-disabled="true"
+            title="Nice try 😄"
+            style={{
+              position: "fixed",
+              left: 0,
+              top: 0,
+              transform: "translate(0px, 0px)",
+              touchAction: "none",
+            }}
+          >
+            Yes
+          </button>
+        ) : null}
+
+        {started && noIsDodging ? (
           <button
             ref={noFloatingRef}
             className="btnChoice btnNoFloating"
@@ -228,6 +325,7 @@ export default function RecipientPage() {
               left: 0,
               top: 0,
               transform: "translate(0px, 0px)",
+              touchAction: "none",
             }}
           >
             No

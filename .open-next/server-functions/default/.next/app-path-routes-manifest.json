@@ -1,0 +1,13 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/api/answer/route": "/api/answer",
+  "/api/create/route": "/api/create",
+  "/api/page/route": "/api/page",
+  "/api/subscribe/route": "/api/subscribe",
+  "/create/page": "/create",
+  "/favicon.ico/route": "/favicon.ico",
+  "/p/[id]/page": "/p/[id]",
+  "/page": "/",
+  "/r/[id]/page": "/r/[id]"
+}
